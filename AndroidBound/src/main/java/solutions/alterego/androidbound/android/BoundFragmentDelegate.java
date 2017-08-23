@@ -1,12 +1,11 @@
 package solutions.alterego.androidbound.android;
 
 import android.app.Activity;
+import android.app.Fragment;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
-import android.support.v4.app.Fragment;
-import android.support.v4.app.FragmentActivity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -23,7 +22,9 @@ import solutions.alterego.androidbound.android.interfaces.IActivityLifecycle;
 import solutions.alterego.androidbound.android.interfaces.IBindableView;
 import solutions.alterego.androidbound.android.interfaces.IBoundFragment;
 import solutions.alterego.androidbound.android.interfaces.IFragmentLifecycle;
+import solutions.alterego.androidbound.android.interfaces.INeedsActivity;
 import solutions.alterego.androidbound.android.interfaces.INeedsConfigurationChange;
+import solutions.alterego.androidbound.android.interfaces.INeedsFragmentManager;
 import solutions.alterego.androidbound.android.interfaces.INeedsNewIntent;
 import solutions.alterego.androidbound.android.interfaces.INeedsOnActivityResult;
 import solutions.alterego.androidbound.interfaces.IHasLogger;
@@ -45,7 +46,7 @@ public class BoundFragmentDelegate
 
     private transient View mBoundView;
 
-    private transient WeakReference<FragmentActivity> mBoundActivity;
+    private transient WeakReference<Activity> mBoundActivity;
 
     private boolean mShouldCallCreate = false;
 
@@ -78,7 +79,7 @@ public class BoundFragmentDelegate
 
     @Override
     public View addViewModel(int layoutResID, ViewModel viewModel, String id, @Nullable ViewGroup parent) {
-        if (mBoundActivity == null) {
+        if (getBoundActivity() == null) {
             throw new RuntimeException("Bound Activity is null!");
         }
 
@@ -94,7 +95,14 @@ public class BoundFragmentDelegate
             throw new RuntimeException("cannot add same instance of viewModel twice!");
         }
 
-        viewModel.setParentActivity(getBoundActivity());
+        if (viewModel instanceof INeedsActivity) {
+            ((INeedsActivity) viewModel).setParentActivity(new WeakReference<>(getBoundActivity()));
+        }
+
+        if (viewModel instanceof INeedsFragmentManager) {
+            ((INeedsFragmentManager) viewModel).setFragmentManager(getBoundActivity().getFragmentManager());
+        }
+
         viewModel.setLogger(getLogger());
         mViewModels.put(id, viewModel);
 
@@ -129,8 +137,8 @@ public class BoundFragmentDelegate
     public void onCreate(Bundle savedInstanceState) {
         if (getViewModels() != null) {
             for (ViewModel viewModel : getViewModels().values()) {
-                if (!viewModel.isCreated()) {
-                    viewModel.onCreate(savedInstanceState);
+                if (viewModel instanceof IActivityLifecycle && !((IActivityLifecycle) viewModel).isCreated()) {
+                    ((IActivityLifecycle) viewModel).onCreate(savedInstanceState);
                 }
             }
 
@@ -139,6 +147,15 @@ public class BoundFragmentDelegate
             mShouldCallCreate = true;
             mCreateBundle = savedInstanceState;
         }
+
+        if (getBoundActivity() != null && getBoundActivity().getIntent() != null) {
+            onNewIntent(getBoundActivity().getIntent()); //we call this manually so that you don't have to check in ViewModel.onCreate()
+        }
+    }
+
+    @Override
+    public boolean isCreated() {
+        return true;
     }
 
     @Nullable
@@ -159,7 +176,9 @@ public class BoundFragmentDelegate
     public void onStart() {
         if (getViewModels() != null) {
             for (ViewModel viewModel : getViewModels().values()) {
-                viewModel.onStart();
+                if (viewModel instanceof IActivityLifecycle) {
+                    ((IActivityLifecycle) viewModel).onStart();
+                }
             }
         }
     }
@@ -173,7 +192,9 @@ public class BoundFragmentDelegate
     public void onResume() {
         if (getViewModels() != null) {
             for (ViewModel viewModel : getViewModels().values()) {
-                viewModel.onResume();
+                if (viewModel instanceof IActivityLifecycle) {
+                    ((IActivityLifecycle) viewModel).onResume();
+                }
             }
         }
     }
@@ -182,7 +203,9 @@ public class BoundFragmentDelegate
     public void onPause() {
         if (getViewModels() != null) {
             for (ViewModel viewModel : getViewModels().values()) {
-                viewModel.onPause();
+                if (viewModel instanceof IActivityLifecycle) {
+                    ((IActivityLifecycle) viewModel).onPause();
+                }
             }
         }
     }
@@ -191,7 +214,9 @@ public class BoundFragmentDelegate
     public void onStop() {
         if (getViewModels() != null) {
             for (ViewModel viewModel : getViewModels().values()) {
-                viewModel.onStop();
+                if (viewModel instanceof IActivityLifecycle) {
+                    ((IActivityLifecycle) viewModel).onStop();
+                }
             }
         }
     }
@@ -200,7 +225,9 @@ public class BoundFragmentDelegate
     public void onSaveInstanceState(Bundle outState) {
         if (getViewModels() != null) {
             for (ViewModel viewModel : getViewModels().values()) {
-                viewModel.onSaveInstanceState(outState);
+                if (viewModel instanceof IActivityLifecycle) {
+                    ((IActivityLifecycle) viewModel).onSaveInstanceState(outState);
+                }
             }
 
             //we reset this only if we have non-null VMs
@@ -262,7 +289,11 @@ public class BoundFragmentDelegate
 
         if (getViewModels() != null) {
             for (ViewModel viewModel : getViewModels().values()) {
-                viewModel.onDestroy();
+                if (viewModel instanceof IActivityLifecycle) {
+                    ((IActivityLifecycle) viewModel).onDestroy();
+                } else {
+                    viewModel.dispose();
+                }
             }
         }
 

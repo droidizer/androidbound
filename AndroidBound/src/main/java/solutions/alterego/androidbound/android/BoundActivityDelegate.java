@@ -17,7 +17,9 @@ import solutions.alterego.androidbound.ViewModel;
 import solutions.alterego.androidbound.android.interfaces.IActivityLifecycle;
 import solutions.alterego.androidbound.android.interfaces.IBindableView;
 import solutions.alterego.androidbound.android.interfaces.IBoundActivity;
+import solutions.alterego.androidbound.android.interfaces.INeedsActivity;
 import solutions.alterego.androidbound.android.interfaces.INeedsConfigurationChange;
+import solutions.alterego.androidbound.android.interfaces.INeedsFragmentManager;
 import solutions.alterego.androidbound.android.interfaces.INeedsNewIntent;
 import solutions.alterego.androidbound.android.interfaces.INeedsOnActivityResult;
 import solutions.alterego.androidbound.interfaces.IHasLogger;
@@ -26,23 +28,25 @@ import solutions.alterego.androidbound.interfaces.INeedsLogger;
 import solutions.alterego.androidbound.interfaces.IViewBinder;
 
 @Accessors(prefix = "m")
-public class BoundActivityDelegate implements IActivityLifecycle, IBoundActivity, INeedsOnActivityResult, INeedsNewIntent, INeedsConfigurationChange,
-        INeedsLogger, IHasLogger {
+public class BoundActivityDelegate
+        implements IActivityLifecycle, IBoundActivity, INeedsOnActivityResult, INeedsNewIntent, INeedsConfigurationChange, INeedsLogger, IHasLogger {
 
     public static final String TAG_VIEWMODEL_MAIN = "androidbound_viewmodel_main";
 
     @Getter
-    private Map<String, ViewModel> mViewModels;
+    protected Map<String, ViewModel> mViewModels;
 
     private ILogger mLogger = null;
 
     private transient WeakReference<Activity> mBoundActivity;
 
+    @Getter
     private boolean mShouldCallCreate = false;
 
+    @Getter
     private Bundle mCreateBundle;
 
-    private IViewBinder mViewBinder;
+    protected IViewBinder mViewBinder;
 
     public BoundActivityDelegate(Activity activity) {
         this(activity, null);
@@ -53,7 +57,7 @@ public class BoundActivityDelegate implements IActivityLifecycle, IBoundActivity
         mViewBinder = viewBinder;
     }
 
-    private IViewBinder getViewBinder() {
+    protected IViewBinder getViewBinder() {
         if (mViewBinder != null) {
             return mViewBinder;
         } else if (getBoundActivity() instanceof IBindableView) {
@@ -63,7 +67,7 @@ public class BoundActivityDelegate implements IActivityLifecycle, IBoundActivity
         }
     }
 
-    private Activity getBoundActivity() {
+    protected Activity getBoundActivity() {
         return mBoundActivity != null ? mBoundActivity.get() : null;
     }
 
@@ -78,7 +82,7 @@ public class BoundActivityDelegate implements IActivityLifecycle, IBoundActivity
 
     @Override
     public View addViewModel(int layoutResID, ViewModel viewModel, String id) {
-        if (mBoundActivity == null) {
+        if (getBoundActivity() == null) {
             throw new RuntimeException("Bound Activity is null!");
         }
 
@@ -94,13 +98,20 @@ public class BoundActivityDelegate implements IActivityLifecycle, IBoundActivity
             throw new RuntimeException("cannot add same instance of viewModel twice!");
         }
 
-        viewModel.setParentActivity(getBoundActivity());
+        if (viewModel instanceof INeedsActivity) {
+            ((INeedsActivity) viewModel).setParentActivity(new WeakReference<>(getBoundActivity()));
+        }
+
+        if (viewModel instanceof INeedsFragmentManager) {
+            ((INeedsFragmentManager) viewModel).setFragmentManager(getBoundActivity().getFragmentManager());
+        }
+
         viewModel.setLogger(getLogger());
         mViewModels.put(id, viewModel);
 
         View view = getViewBinder().inflate(getBoundActivity(), viewModel, layoutResID, null);
 
-        if (mShouldCallCreate) {
+        if (isShouldCallCreate()) {
             onCreate(mCreateBundle);
         }
 
@@ -125,8 +136,8 @@ public class BoundActivityDelegate implements IActivityLifecycle, IBoundActivity
     public void onCreate(Bundle savedInstanceState) {
         if (getViewModels() != null) {
             for (ViewModel viewModel : getViewModels().values()) {
-                if (!viewModel.isCreated()) {
-                    viewModel.onCreate(savedInstanceState);
+                if (viewModel instanceof IActivityLifecycle && !((IActivityLifecycle) viewModel).isCreated()) {
+                    ((IActivityLifecycle) viewModel).onCreate(savedInstanceState);
                 }
             }
 
@@ -135,13 +146,24 @@ public class BoundActivityDelegate implements IActivityLifecycle, IBoundActivity
             mShouldCallCreate = true;
             mCreateBundle = savedInstanceState;
         }
+
+        if (getBoundActivity() != null && getBoundActivity().getIntent() != null) {
+            onNewIntent(getBoundActivity().getIntent()); //we call this manually so that you don't have to check in ViewModel.onCreate()
+        }
+    }
+
+    @Override
+    public boolean isCreated() {
+        return true;
     }
 
     @Override
     public void onStart() {
         if (getViewModels() != null) {
             for (ViewModel viewModel : getViewModels().values()) {
-                viewModel.onStart();
+                if (viewModel instanceof IActivityLifecycle) {
+                    ((IActivityLifecycle) viewModel).onStart();
+                }
             }
         }
     }
@@ -150,7 +172,9 @@ public class BoundActivityDelegate implements IActivityLifecycle, IBoundActivity
     public void onRestart() {
         if (getViewModels() != null) {
             for (ViewModel viewModel : getViewModels().values()) {
-                viewModel.onRestart();
+                if (viewModel instanceof IActivityLifecycle) {
+                    ((IActivityLifecycle) viewModel).onRestart();
+                }
             }
         }
     }
@@ -159,7 +183,9 @@ public class BoundActivityDelegate implements IActivityLifecycle, IBoundActivity
     public void onResume() {
         if (getViewModels() != null) {
             for (ViewModel viewModel : getViewModels().values()) {
-                viewModel.onResume();
+                if (viewModel instanceof IActivityLifecycle) {
+                    ((IActivityLifecycle) viewModel).onResume();
+                }
             }
         }
     }
@@ -168,7 +194,9 @@ public class BoundActivityDelegate implements IActivityLifecycle, IBoundActivity
     public void onPause() {
         if (getViewModels() != null) {
             for (ViewModel viewModel : getViewModels().values()) {
-                viewModel.onPause();
+                if (viewModel instanceof IActivityLifecycle) {
+                    ((IActivityLifecycle) viewModel).onPause();
+                }
             }
         }
     }
@@ -177,7 +205,9 @@ public class BoundActivityDelegate implements IActivityLifecycle, IBoundActivity
     public void onStop() {
         if (getViewModels() != null) {
             for (ViewModel viewModel : getViewModels().values()) {
-                viewModel.onStop();
+                if (viewModel instanceof IActivityLifecycle) {
+                    ((IActivityLifecycle) viewModel).onStop();
+                }
             }
         }
     }
@@ -189,7 +219,9 @@ public class BoundActivityDelegate implements IActivityLifecycle, IBoundActivity
 
         if (getViewModels() != null) {
             for (ViewModel viewModel : getViewModels().values()) {
-                viewModel.onSaveInstanceState(outState);
+                if (viewModel instanceof IActivityLifecycle) {
+                    ((IActivityLifecycle) viewModel).onSaveInstanceState(outState);
+                }
             }
         }
     }
@@ -209,7 +241,11 @@ public class BoundActivityDelegate implements IActivityLifecycle, IBoundActivity
 
         if (getViewModels() != null) {
             for (ViewModel viewModel : getViewModels().values()) {
-                viewModel.onDestroy();
+                if (viewModel instanceof IActivityLifecycle) {
+                    ((IActivityLifecycle) viewModel).onDestroy();
+                } else {
+                    viewModel.dispose();
+                }
             }
         }
 
