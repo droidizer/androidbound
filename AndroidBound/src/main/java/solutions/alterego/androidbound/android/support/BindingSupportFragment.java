@@ -1,10 +1,10 @@
-package solutions.alterego.androidbound.android;
+package solutions.alterego.androidbound.android.support;
 
-import android.app.Fragment;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
+import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -20,11 +20,11 @@ import solutions.alterego.androidbound.interfaces.ILogger;
 import solutions.alterego.androidbound.interfaces.INeedsLogger;
 
 @Accessors(prefix = "m")
-public class BindingFragment extends Fragment implements IFragmentLifecycle, IBoundFragment, INeedsNewIntent, INeedsLogger, IHasLogger {
+public class BindingSupportFragment extends Fragment implements IFragmentLifecycle, IBoundFragment, INeedsNewIntent, INeedsLogger, IHasLogger {
 
     private ILogger mLogger = NullLogger.instance;
 
-    private BoundFragmentDelegate mBoundFragmentDelegate;
+    private BoundSupportFragmentDelegate mBoundFragmentDelegate;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -35,8 +35,8 @@ public class BindingFragment extends Fragment implements IFragmentLifecycle, IBo
         mBoundFragmentDelegate.setLogger(mLogger);
     }
 
-    protected BoundFragmentDelegate getBoundFragmentDelegate() {
-        return new BoundFragmentDelegate(this);
+    protected BoundSupportFragmentDelegate getBoundFragmentDelegate() {
+        return new BoundSupportFragmentDelegate(this);
     }
 
     @Nullable
